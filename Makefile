@@ -187,7 +187,7 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	do\
 		echo "set_global_assignment -name SOURCE_FILE $${psrc}" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	done;\
-	for psrc in $(MEM_SRC);\
+	for msrc in $(MEM_SRC);\
 	do\
 		echo "set_global_assignment -name SOURCE_FILE $${msrc}" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	done;\
