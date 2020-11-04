@@ -94,9 +94,10 @@ all: altera-project
 #H# veritedium                  : Run veritedium AUTO features
 veritedium:
 	@$(foreach SRC,$(VERILOG_SRC),$(call veritedium-command,$(SRC)))
+	$(MAKE) del-bak
 
 #H# lint                        : Run the verilator linter for the RTL code
-lint: print-rtl-srcs
+lint: veritedium print-rtl-srcs
 	@if [[ "$(FPGA_TOP_MODULE)" == "" ]]; then\
 		echo -e "$(_error_)[ERROR] No defined top module!$(_reset_)";\
 	else\
@@ -138,6 +139,37 @@ altera-connect:
 #H# altera-scan                 : Scan for connected devices
 altera-scan: altera-connect
 	$(QUARTUS_PGM) --auto
+
+#H# rtl-sim             : Run RTL simulation
+fpga-rtl-sim:
+	@echo -e "$(_info_)\n[INFO] FPGA Test RTL Simulation\n$(_reset_)";\
+	if [[ "$(SIM_TOOL)" == "" ]]; then\
+		echo -e "$(_error_)[ERROR] No defined RTL simulation tool! Define \"SIM_TOOL\" environment variable or define it in the \"project.config\" file.$(_reset_)";\
+	else\
+		for stool in $(SIM_TOOL);\
+		do\
+			if [[ "$(SIM_MODULES)" == "" ]]; then\
+				echo -e "$(_error_)[ERROR] No defined simulation top module!$(_reset_)";\
+			else\
+				echo -e "$(_info_)[INFO] Simulation with $${stool} tool\n$(_reset_)";\
+				for smodule in $(SIM_MODULES);\
+				do\
+					echo -e "$(_flag_)\n [*] Simulating Top Module : $${smodule}\n$(_reset_)";\
+					$(MAKE) -C $(SIMULATION_DIR) sim\
+						SIM_TOP_MODULE=$${smodule}\
+						SIM_TOOL=$${stool}\
+						SIM_CREATE_VCD=$(SIM_CREATE_VCD)\
+						SIM_OPEN_WAVE=$(SIM_OPEN_WAVE)\
+						EXT_VERILOG_SRC="$(VERILOG_SRC)"\
+						EXT_VERILOG_HEADERS="$(VERILOG_HEADERS)"\
+						EXT_PACKAGE_SRC="$(PACKAGE_SRC)"\
+						EXT_MEM_SRC="$(MEM_SRC)"\
+						EXT_INCLUDE_DIRS="$(INCLUDE_DIRS)"\
+						EXT_RTL_PATHS="$(RTL_PATHS)";\
+				done;\
+			fi;\
+		done;\
+	fi
 
 $(ALTERA_SOF_FILE): $(RTL_OBJS)
 	@echo -e "$(_info_)\n[INFO] Missing SOF file, generating it...$(_reset_)\n"
