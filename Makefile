@@ -6,6 +6,8 @@
 #   https://github.com/m4j0rt0m/rtl-develop-template-fpga-altera  #
 ###################################################################
 
+SHELL                      := /bin/bash
+
 MKFILE_PATH                 = $(abspath $(firstword $(MAKEFILE_LIST)))
 TOP_DIR                     = $(shell dirname $(MKFILE_PATH))
 
@@ -185,7 +187,7 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	do\
 		echo "set_global_assignment -name SOURCE_FILE $${psrc}" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	done;\
-	for psrc in $(MEM_SRC);\
+	for msrc in $(MEM_SRC);\
 	do\
 		echo "set_global_assignment -name SOURCE_FILE $${msrc}" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	done;\
