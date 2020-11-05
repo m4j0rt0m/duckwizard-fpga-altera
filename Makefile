@@ -144,7 +144,7 @@ altera-scan: altera-connect
 fpga-rtl-sim:
 	@echo -e "$(_info_)\n[INFO] FPGA Test RTL Simulation\n$(_reset_)";\
 	if [[ "$(SIM_TOOL)" == "" ]]; then\
-		echo -e "$(_error_)[ERROR] No defined RTL simulation tool! Define \"SIM_TOOL\" environment variable or define it in the \"project.config\" file.$(_reset_)";\
+		echo -e "$(_error_)[ERROR] No defined RTL simulation tool!$(_reset_)";\
 	else\
 		for stool in $(SIM_TOOL);\
 		do\
