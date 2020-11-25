@@ -210,6 +210,7 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	echo "# Automatically created by the Makefile #" > $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set project_name $(PROJECT)" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "if [catch {project_open $(PROJECT)}] {project_new $(PROJECT)}" >> $(ALTERA_CREATE_PROJECT_TCL);\
+	echo "set_global_assignment -name VERILOG_MACRO \"__QUARTUS_SYN__\"" >> $(Q_CREATE_PROJECT_TCL);\
 	echo "set_global_assignment -name FAMILY \"$(ALTERA_TARGET)\"" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set_global_assignment -name DEVICE \"$(ALTERA_DEVICE)\"" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set_global_assignment -name TOP_LEVEL_ENTITY $(FPGA_TOP_MODULE)" >> $(ALTERA_CREATE_PROJECT_TCL);\
