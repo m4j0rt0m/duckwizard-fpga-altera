@@ -1,5 +1,4 @@
 ###################################################################
-# Project:                                                        #
 # Description:      Altera FPGA Board Test - Makefile             #
 #                                                                 #
 # Template written by Abraham J. Ruiz R.                          #
@@ -7,9 +6,11 @@
 ###################################################################
 
 SHELL                      := /bin/bash
+REMOTE-URL-SSH             := git@github.com:m4j0rt0m/rtl-develop-template-fpga-altera.git
+REMOTE-URL-HTTPS           := https://github.com/m4j0rt0m/rtl-develop-template-fpga-altera.git
 
-MKFILE_PATH                 = $(abspath $(firstword $(MAKEFILE_LIST)))
-TOP_DIR                     = $(shell dirname $(MKFILE_PATH))
+MKFILE_PATH                := $(abspath $(firstword $(MAKEFILE_LIST)))
+TOP_DIR                    := $(shell dirname $(MKFILE_PATH))
 
 ### directories ###
 SOURCE_DIR                  = $(TOP_DIR)/src
@@ -32,7 +33,6 @@ EXT_VERILOG_SRC            ?=
 EXT_VERILOG_HEADERS        ?=
 EXT_PACKAGE_SRC            ?=
 EXT_MEM_SRC                ?=
-EXT_INCLUDE_DIRS           ?=
 EXT_RTL_PATHS              ?=
 
 ### fpga rtl directories ###
@@ -49,7 +49,7 @@ MEM_SRC                     = $(EXT_MEM_SRC) $(wildcard $(shell find $(MEM_DIRS)
 RTL_PATHS                   = $(EXT_RTL_PATHS) $(RTL_DIRS) $(INCLUDE_DIRS) $(PACKAGE_DIRS) $(MEM_DIRS)
 
 ### include flags ###
-INCLUDES_FLAGS              = $(addprefix -I, $(INCLUDE_DIRS)) $(addprefix -I, $(EXT_INCLUDE_DIRS))
+INCLUDES_FLAGS              = $(addprefix -I, $(RTL_PATHS))
 
 ### quartus cli ###
 QUARTUS_SH                  = quartus_sh
@@ -68,13 +68,17 @@ BUILD_DIR                   = $(OUTPUT_DIR)/$(FPGA_TOP_MODULE)
 ALTERA_PROJECT_FILES        = $(BUILD_DIR)/$(PROJECT).qpf $(BUILD_DIR)/$(PROJECT).qsf
 ALTERA_CREATE_PROJECT_TCL   = $(BUILD_DIR)/quartus_create_project_$(PROJECT).tcl
 ALTERA_PROJECT_SDC          = $(BUILD_DIR)/quartus_project_$(PROJECT).sdc
-ALTERA_VIRTUAL_PINS_TCL     = $(SCRIPTS_DIR)/virtual_pins_all_pins.tcl
 Q_MAP_RPT                   = $(BUILD_DIR)/$(PROJECT).map.rpt
 Q_FIT_RPT                   = $(BUILD_DIR)/$(PROJECT).fit.rpt
 Q_ASM_RPT                   = $(BUILD_DIR)/$(PROJECT).asm.rpt
 Q_STA_RPT                   = $(BUILD_DIR)/$(PROJECT).sta.rpt
 RTL_OBJS                    = $(VERILOG_SRC) $(PACKAGE_SRC) $(VERILOG_HEADERS) $(MEM_SRC)
 RPT_OBJS                    = $(Q_MAP_RPT) $(Q_FIT_RPT) $(Q_ASM_RPT) $(Q_STA_RPT)
+ifeq ($(FPGA_USES_CLOCK),yes)
+ALTERA_VIRTUAL_PINS_TCL     = $(SCRIPTS_DIR)/virtual_pins_all_pins_xcpt_clk.tcl
+else
+ALTERA_VIRTUAL_PINS_TCL     = $(SCRIPTS_DIR)/virtual_pins_all_pins.tcl
+endif
 
 ### altera fpga board flags ###
 ALTERA_FPGA_CABLE           = usb-blaster
@@ -93,8 +97,12 @@ all: altera-project
 
 #H# veritedium                  : Run veritedium AUTO features
 veritedium:
+	@echo "Running Veritedium Autocomplete..."
 	@$(foreach SRC,$(VERILOG_SRC),$(call veritedium-command,$(SRC)))
-	$(MAKE) del-bak
+	@echo "Deleting unnecessary backup files (*~ or *.bak)..."
+	find ./* -name "*~" -delete
+	find ./* -name "*.bak" -delete
+	@echo "Finished!"
 
 #H# lint                        : Run the verilator linter for the RTL code
 lint: veritedium print-rtl-srcs
@@ -102,7 +110,7 @@ lint: veritedium print-rtl-srcs
 		echo -e "$(_error_)[ERROR] No defined top module!$(_reset_)";\
 	else\
 		echo -e "$(_info_)\n[INFO] Linting using $(LINT) tool$(_reset_)";\
-		$(LINT) $(LINT_FLAGS) $(VERILOG_SRC) --top-module $(FPGA_TOP_MODULE);\
+		$(LINT) $(LINT_FLAGS) $(FPGA_TOP_MODULE).v --top-module $(FPGA_TOP_MODULE);\
 	fi
 
 #H# altera-project              : Run Altera FPGA test
@@ -164,7 +172,6 @@ fpga-rtl-sim:
 						EXT_VERILOG_HEADERS="$(VERILOG_HEADERS)"\
 						EXT_PACKAGE_SRC="$(PACKAGE_SRC)"\
 						EXT_MEM_SRC="$(MEM_SRC)"\
-						EXT_INCLUDE_DIRS="$(INCLUDE_DIRS)"\
 						EXT_RTL_PATHS="$(RTL_PATHS)";\
 				done;\
 			fi;\
@@ -183,7 +190,11 @@ $(RPT_OBJS): $(RTL_OBJS)
 	@cd $(BUILD_DIR);\
 	$(QUARTUS_SH) --flow compile $(PROJECT)
 
+ifeq ($(FPGA_USES_CLOCK),yes)
 $(ALTERA_PROJECT_FILES): $(ALTERA_PROJECT_SDC) $(ALTERA_CREATE_PROJECT_TCL)
+else
+$(ALTERA_PROJECT_FILES): $(ALTERA_CREATE_PROJECT_TCL)
+endif
 
 $(ALTERA_PROJECT_SDC):
 	@mkdir -p $(BUILD_DIR);\
@@ -223,10 +234,14 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	do\
 		echo "set_global_assignment -name SOURCE_FILE $${msrc}" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	done;\
-	echo "set_global_assignment -name SDC_FILE $(ALTERA_PROJECT_SDC)" >> $(ALTERA_CREATE_PROJECT_TCL);\
+	if [[ "$(FPGA_USES_CLOCK)" == "yes" ]]; then\
+		echo "set_global_assignment -name SDC_FILE $(ALTERA_PROJECT_SDC)" >> $(ALTERA_CREATE_PROJECT_TCL);\
+	fi;\
 	if [[ "$(FPGA_VIRTUAL_PINS)" == "yes" ]]; then\
 		cat "$(ALTERA_VIRTUAL_PINS_TCL)" >> $(ALTERA_CREATE_PROJECT_TCL);\
-		echo "make_all_pins_virtual $(FPGA_CLOCK_SRC)" >> $(ALTERA_CREATE_PROJECT_TCL);\
+		if [[ "$(FPGA_USES_CLOCK)" == "yes" ]]; then\
+			echo "make_all_pins_virtual $(FPGA_CLOCK_SRC)" >> $(ALTERA_CREATE_PROJECT_TCL);\
+		fi;\
 	fi;\
 	echo "project_close" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "qexit -success" >> $(ALTERA_CREATE_PROJECT_TCL)
