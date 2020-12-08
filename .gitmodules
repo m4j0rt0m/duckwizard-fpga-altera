@@ -1,3 +1,4 @@
 [submodule "simulation"]
 	path = simulation
 	url = git@github.com:m4j0rt0m/rtl-develop-template-simulation.git
+	branch = master
