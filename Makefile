@@ -47,6 +47,7 @@ VERILOG_HEADERS             = $(EXT_VERILOG_HEADERS) $(wildcard $(shell find $(I
 PACKAGE_SRC                 = $(EXT_PACKAGE_SRC) $(wildcard $(shell find $(PACKAGE_DIRS) -type f \( -iname \*.sv \)))
 MEM_SRC                     = $(EXT_MEM_SRC) $(wildcard $(shell find $(MEM_DIRS) -type f \( -iname \*.bin -o -iname \*.hex \)))
 RTL_PATHS                   = $(EXT_RTL_PATHS) $(RTL_DIRS) $(INCLUDE_DIRS) $(PACKAGE_DIRS) $(MEM_DIRS)
+TOP_MODULE_FILE             = $(shell basename $(shell grep -i -w -r "module $(FPGA_TOP_MODULE)" $(RTL_PATHS) | cut -d ":" -f 1))
 
 ### include flags ###
 INCLUDES_FLAGS              = $(addprefix -I, $(RTL_PATHS))
@@ -59,7 +60,7 @@ QUARTUS_PGM                 = quartus_pgm
 ALTERA_TARGET              := $(or $(ALTERA_TARGET),$(DEFAULT_ALTERA_TARGET))
 ALTERA_DEVICE              := $(or $(ALTERA_DEVICE),$(DEFAULT_ALTERA_DEVICE))
 ALTERA_PACKAGE             := $(or $(ALTERA_PACKAGE),$(DEFAULT_ALTERA_PACKAGE))
-ALTERA_CLOCK_PERIOD        := $(or $(ALTERA_CLOCK_PERIOD),$(DEFAULT_ALTERA_CLOCK_PERIOD))
+ALTERA_CLOCK_MHZ           := $(or $(ALTERA_CLOCK_MHZ),$(DEFAULT_ALTERA_CLOCK_MHZ))
 ALTERA_MIN_TEMP            := $(or $(ALTERA_MIN_TEMP),$(DEFAULT_ALTERA_MIN_TEMP))
 ALTERA_MAX_TEMP            := $(or $(ALTERA_MAX_TEMP),$(DEFAULT_ALTERA_MAX_TEMP))
 
@@ -91,7 +92,7 @@ ALTERA_SOF_FILE             = $(BUILD_DIR)/$(PROJECT).sof
 LINT                        = verilator
 LINT_SV_FLAGS               = +1800-2017ext+sv -sv
 LINT_W_FLAGS                = -Wall -Wno-IMPORTSTAR -Wno-fatal
-LINT_FLAGS                  = --lint-only --top-module $(FPGA_TOP_MODULE) $(LINT_SV_FLAGS) $(LINT_W_FLAGS) --quiet-exit --error-limit 200 $(PACKAGE_SRC) $(INCLUDES_FLAGS)
+LINT_FLAGS                  = --lint-only --top-module $(FPGA_TOP_MODULE) $(LINT_SV_FLAGS) $(LINT_W_FLAGS) --quiet-exit --error-limit 200 $(PACKAGE_SRC) $(INCLUDES_FLAGS) $(TOP_MODULE_FILE)
 
 all: altera-project
 
@@ -105,12 +106,13 @@ veritedium:
 	@echo -e "$(_flag_)Finished!$(_reset_)"
 
 #H# lint                        : Run the verilator linter for the RTL code
-lint: veritedium print-rtl-srcs
+lint: print-rtl-srcs
 	@if [[ "$(FPGA_TOP_MODULE)" == "" ]]; then\
 		echo -e "$(_error_)[ERROR] No defined top module!$(_reset_)";\
 	else\
 		echo -e "$(_info_)\n[INFO] Linting using $(LINT) tool$(_reset_)";\
-		$(LINT) $(LINT_FLAGS) $(FPGA_TOP_MODULE).v --top-module $(FPGA_TOP_MODULE);\
+		echo -e "\n$(_flag_) cmd: $(LINT) $(LINT_FLAGS)$(_reset_)\n";\
+		$(LINT) $(LINT_FLAGS);\
 	fi
 
 #H# altera-project              : Run Altera FPGA test
@@ -124,7 +126,7 @@ endif
 altera-rtl-synth: print-rtl-srcs $(RPT_OBJS)
 
 #H# quartus-create-project      : Create the Quartus project
-quartus-create-project: veritedium $(ALTERA_PROJECT_FILES)
+quartus-create-project: $(ALTERA_PROJECT_FILES)
 	@rm -rf $(ALTERA_PROJECT_FILES);\
 	mkdir -p $(BUILD_DIR);\
 	cd $(BUILD_DIR);\
@@ -183,7 +185,7 @@ $(ALTERA_SOF_FILE): $(RTL_OBJS)
 	$(MAKE) altera-project
 
 $(RPT_OBJS): $(RTL_OBJS)
-	$(MAKE) quartus-create-project
+	@$(MAKE) quartus-create-project
 	@if [[ "$(FPGA_VIRTUAL_PINS)" != "yes" ]]; then\
 		$(MAKE) altera-set-pinout;\
 	fi
@@ -199,9 +201,11 @@ endif
 $(ALTERA_PROJECT_SDC):
 	@mkdir -p $(BUILD_DIR);\
 	echo "# Automatically created by the Makefile #" > $(ALTERA_PROJECT_SDC);\
-	for csrc in $(FPGA_CLOCK_SRC);\
+	fpga_clock_src=($(FPGA_CLOCK_SRC));\
+	altera_clock_mhz=($(ALTERA_CLOCK_MHZ));\
+	for csrc in `seq 0 $$(($${#fpga_clock_src[@]}-1))`;\
 	do\
-		echo "create_clock -name $${csrc} -period $(ALTERA_CLOCK_PERIOD) [get_ports {$${csrc}}]" >> $(ALTERA_PROJECT_SDC);\
+		echo "create_clock -name $${fpga_clock_src[$$csrc]} -period $${altera_clock_mhz[$$csrc]}MHz [get_ports {$${fpga_clock_src[$$csrc]}}]" >> $(ALTERA_PROJECT_SDC);\
 	done;\
 	echo "derive_clock_uncertainty" >> $(ALTERA_PROJECT_SDC)
 
@@ -210,7 +214,7 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	echo "# Automatically created by the Makefile #" > $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set project_name $(PROJECT)" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "if [catch {project_open $(PROJECT)}] {project_new $(PROJECT)}" >> $(ALTERA_CREATE_PROJECT_TCL);\
-	echo "set_global_assignment -name VERILOG_MACRO \"__QUARTUS_SYN__\"" >> $(Q_CREATE_PROJECT_TCL);\
+	echo "set_global_assignment -name VERILOG_MACRO \"__QUARTUS_SYN__\"" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set_global_assignment -name FAMILY \"$(ALTERA_TARGET)\"" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set_global_assignment -name DEVICE \"$(ALTERA_DEVICE)\"" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "set_global_assignment -name TOP_LEVEL_ENTITY $(FPGA_TOP_MODULE)" >> $(ALTERA_CREATE_PROJECT_TCL);\
