@@ -89,10 +89,15 @@ ALTERA_PINOUT_TCL           = $(SCRIPTS_DIR)/$(FPGA_TOP_MODULE)_set_pinout.tcl
 ALTERA_SOF_FILE             = $(BUILD_DIR)/$(PROJECT).sof
 
 ### linter flags ###
-LINT                        = verilator
-LINT_SV_FLAGS               = +1800-2017ext+sv -sv
-LINT_W_FLAGS                = -Wall -Wno-IMPORTSTAR -Wno-fatal
-LINT_FLAGS                  = --lint-only --top-module $(FPGA_TOP_MODULE) $(LINT_SV_FLAGS) $(LINT_W_FLAGS) --quiet-exit --error-limit 200 $(PACKAGE_SRC) $(INCLUDES_FLAGS) $(TOP_MODULE_FILE)
+VERILATOR_LINT              = verilator
+VERILATOR_LINT_SV_FLAGS     = +1800-2017ext+sv -sv
+VERILATOR_LINT_W_FLAGS      = -Wall -Wno-IMPORTSTAR -Wno-fatal
+VERILATOR_CONFIG_FILE       = $(SCRIPTS_DIR)/config.vlt
+ifeq ("$(wildcard $(VERILATOR_CONFIG_FILE))","")
+VERILATOR_CONFIG_FILE       =
+endif
+LINT                        = $(VERILATOR_LINT)
+LINT_FLAGS                  = --lint-only --top-module $(FPGA_TOP_MODULE) $(VERILATOR_LINT_SV_FLAGS) $(VERILATOR_LINT_W_FLAGS) --quiet-exit --error-limit 200 $(VERILATOR_CONFIG_FILE) $(INCLUDES_FLAGS) $(PACKAGE_SRC) $(TOP_MODULE_FILE)
 
 all: altera-project
 
@@ -105,13 +110,13 @@ veritedium:
 	find ./* -name "*.bak" -delete
 	@echo -e "$(_flag_)Finished!$(_reset_)"
 
-#H# lint                        : Run the verilator linter for the RTL code
+#H# lint                        : Run the RTL code linter
 lint: print-rtl-srcs
 	@if [[ "$(FPGA_TOP_MODULE)" == "" ]]; then\
 		echo -e "$(_error_)[ERROR] No defined top module!$(_reset_)";\
 	else\
 		echo -e "$(_info_)\n[INFO] Linting using $(LINT) tool$(_reset_)";\
-		echo -e "\n$(_flag_) cmd: $(LINT) $(LINT_FLAGS)$(_reset_)\n";\
+		echo -e "$(_flag_) cmd: $(LINT) $(LINT_FLAGS)\n$(_reset_)";\
 		$(LINT) $(LINT_FLAGS);\
 	fi
 
