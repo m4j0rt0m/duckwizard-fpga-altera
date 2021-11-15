@@ -1,25 +1,25 @@
-###################################################################
-# Description:      Altera FPGA Board Test - Makefile             #
-#                                                                 #
-# Template written by Abraham J. Ruiz R.                          #
-#   https://github.com/m4j0rt0m/rtl-develop-template-fpga-altera  #
-###################################################################
+# Author:      Abraham J. Ruiz R.
+# Description: Altera FPGA Board Test Makefile
+# Version:     1.2
+# Url:         https://github.com/m4j0rt0m/duckwizard-fpga-altera
 
 SHELL                      := /bin/bash
-REMOTE-URL-SSH             := git@github.com:m4j0rt0m/rtl-develop-template-fpga-altera.git
-REMOTE-URL-HTTPS           := https://github.com/m4j0rt0m/rtl-develop-template-fpga-altera.git
+REMOTE-URL-SSH             := git@github.com:m4j0rt0m/duckwizard-fpga-altera.git
+REMOTE-URL-HTTPS           := https://github.com/m4j0rt0m/duckwizard-fpga-altera.git
 
 MKFILE_PATH                := $(abspath $(firstword $(MAKEFILE_LIST)))
 TOP_DIR                    := $(shell dirname $(MKFILE_PATH))
 
 ### directories ###
 SOURCE_DIR                  = $(TOP_DIR)/src
+SV2V_RTL_DIR                = $(TOP_DIR)/.sv2v
 OUTPUT_DIR                  = $(TOP_DIR)/build
 SIMULATION_DIR              = $(TOP_DIR)/simulation
 SCRIPTS_DIR                 = $(TOP_DIR)/scripts
 
 ### makefile includes ###
 include $(SCRIPTS_DIR)/funct.mk
+include $(SCRIPTS_DIR)/misc.mk
 include $(SCRIPTS_DIR)/default.mk
 
 ### fpga test configuration ###
@@ -30,7 +30,9 @@ FPGA_CLOCK_SRC             ?=
 
 ### external sources wildcards ###
 EXT_VERILOG_SRC            ?=
+EXT_SVERILOG_SRC           ?=
 EXT_VERILOG_HEADERS        ?=
+EXT_SVERILOG_HEADERS       ?=
 EXT_PACKAGE_SRC            ?=
 EXT_MEM_SRC                ?=
 EXT_RTL_PATHS              ?=
@@ -40,13 +42,23 @@ RTL_DIRS                    = $(wildcard $(shell find $(SOURCE_DIR) -type d \( -
 INCLUDE_DIRS                = $(wildcard $(shell find $(SOURCE_DIR) -type d \( -iname include \)))
 PACKAGE_DIRS                = $(wildcard $(shell find $(SOURCE_DIR) -type d \( -iname package \)))
 MEM_DIRS                    = $(wildcard $(shell find $(SOURCE_DIR) -type d \( -iname mem \)))
+RTL_PATHS                   = $(EXT_RTL_PATHS) $(RTL_DIRS) $(INCLUDE_DIRS) $(PACKAGE_DIRS) $(MEM_DIRS)
 
 ### sources wildcards ###
-VERILOG_SRC                 = $(EXT_VERILOG_SRC) $(wildcard $(shell find $(RTL_DIRS) -type f \( -iname \*.v -o -iname \*.sv -o -iname \*.vhdl \)))
-VERILOG_HEADERS             = $(EXT_VERILOG_HEADERS) $(wildcard $(shell find $(INCLUDE_DIRS) -type f \( -iname \*.h -o -iname \*.vh -o -iname \*.svh -o -iname \*.sv -o -iname \*.v \)))
-PACKAGE_SRC                 = $(EXT_PACKAGE_SRC) $(wildcard $(shell find $(PACKAGE_DIRS) -type f \( -iname \*.sv \)))
+ifeq ("$(SV2V_RERUN)","yes")
+VERILOG_SRC                 = $(EXT_VERILOG_SRC) $(wildcard $(shell find $(RTL_DIRS) -type f \( -iname \*.v -o -iname \*.vhdl \))) $(wildcard $(SV2V_RTL_DIR)/*.v)
+SVERILOG_SRC                =
+SVERILOG_HEADERS            =
+PACKAGE_SRC                 =
+else
+VERILOG_SRC                 = $(EXT_VERILOG_SRC) $(wildcard $(shell find $(RTL_DIRS) -type f \( -iname \*.v -o -iname \*.vhdl \)))
+SVERILOG_SRC                = $(EXT_SVERILOG_SRC) $(wildcard $(shell find $(RTL_DIRS) -type f \( -iname \*.sv \)))
+SVERILOG_HEADERS            = $(EXT_SVERILOG_HEADERS) $(wildcard $(shell find $(INCLUDE_DIRS) -type f \( -iname \*.svh -o -iname \*.sv \)))
+PACKAGE_SRC                 = $(shell $(SCRIPTS_DIR)/order_sv_pkg $(EXT_PACKAGE_SRC) $(wildcard $(shell find $(PACKAGE_DIRS) -type f \( -iname \*.sv \))))
+endif
+VERILOG_HEADERS             = $(EXT_VERILOG_HEADERS) $(wildcard $(shell find $(INCLUDE_DIRS) -type f \( -iname \*.h -o -iname \*.vh -o -iname \*.v \)))
 MEM_SRC                     = $(EXT_MEM_SRC) $(wildcard $(shell find $(MEM_DIRS) -type f \( -iname \*.bin -o -iname \*.hex \)))
-RTL_PATHS                   = $(EXT_RTL_PATHS) $(RTL_DIRS) $(INCLUDE_DIRS) $(PACKAGE_DIRS) $(MEM_DIRS)
+RTL_SRC                     = $(VERILOG_SRC) $(SVERILOG_SRC) $(VERILOG_HEADERS) $(SVERILOG_HEADERS) $(PACKAGE_SRC) $(MEM_SRC)
 TOP_MODULE_FILE             = $(shell basename $(shell grep -i -w -r "module $(FPGA_TOP_MODULE)" $(RTL_PATHS) | cut -d ":" -f 1))
 
 ### include flags ###
@@ -99,6 +111,13 @@ endif
 LINT                        = $(VERILATOR_LINT)
 LINT_FLAGS                  = --lint-only --top-module $(FPGA_TOP_MODULE) $(VERILATOR_LINT_SV_FLAGS) $(VERILATOR_LINT_W_FLAGS) --quiet-exit --error-limit 200 $(VERILATOR_CONFIG_FILE) $(INCLUDES_FLAGS) $(PACKAGE_SRC) $(TOP_MODULE_FILE)
 
+### sv2v flags ###
+SV2V_SOURCE :=
+SV2V_SV     := $(notdir $(SV2V_SOURCE))
+SV2V_V      := $(patsubst %.sv,%.v,$(SV2V_SV))
+SV2V_DEST   := "$(SV2V_RTL_DIR)/$(SV2V_V)"
+SV2V_FLAGS  := $(INCLUDES_FLAGS) $(PACKAGE_SRC)
+
 all: altera-project
 
 #H# veritedium                  : Run veritedium AUTO features
@@ -121,10 +140,20 @@ lint: print-rtl-srcs
 	fi
 
 #H# altera-project              : Run Altera FPGA test
+ifeq ($(USE_SV2V),yes)
+altera-project: sv2v-srcs-iverilog
+	$(MAKE) SV2V_RERUN=yes altera-project-sv2v
+ifeq ($(FPGA_BOARD_TEST),yes)
+altera-project-sv2v: print-rtl-srcs $(RPT_OBJS) altera-flash-fpga
+else
+altera-project-sv2v: print-rtl-srcs $(RPT_OBJS)
+endif
+else
 ifeq ($(FPGA_BOARD_TEST),yes)
 altera-project: print-rtl-srcs $(RPT_OBJS) altera-flash-fpga
 else
 altera-project: print-rtl-srcs $(RPT_OBJS)
+endif
 endif
 
 #H# altera-rtl-synth            : Run RTL synthesis with Quartus
@@ -256,9 +285,14 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	echo "project_close" >> $(ALTERA_CREATE_PROJECT_TCL);\
 	echo "qexit -success" >> $(ALTERA_CREATE_PROJECT_TCL)
 
-#H# print-rtl-srcs              : Print RTL sources
-print-rtl-srcs:
-	$(call print-srcs-command)
+#H# sv2v-srcs                   : Convert RTL sources from SystemVerilog to Verilog (using sv2v tool)
+sv2v-srcs-iverilog:
+	@mkdir -p $(SV2V_RTL_DIR)
+	@for src in $(SVERILOG_SRC); do $(MAKE) sv2v-convert-iverilog SV2V_SOURCE=$${src}; done
+
+#H# sv2v-convert                : Convert SystemVerilog module to Verilog
+sv2v-convert-iverilog: check-sv2v
+	sv2v --write=$(SV2V_DEST) $(SV2V_FLAGS) $(SV2V_SOURCE)
 
 #H# clean                       : Clean build directory
 clean:
