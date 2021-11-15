@@ -1,1 +1,1 @@
-# RTL Development: Altera FPGA Board Test (Template)
+# duckWizard: Altera FPGA Board Test
