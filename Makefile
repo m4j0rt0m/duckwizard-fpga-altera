@@ -141,7 +141,7 @@ lint: print-rtl-srcs
 
 #H# altera-project              : Run Altera FPGA test
 ifeq ($(USE_SV2V),yes)
-altera-project: sv2v-srcs-iverilog
+altera-project: sv2v-srcs
 	$(MAKE) SV2V_RERUN=yes altera-project-sv2v
 ifeq ($(FPGA_BOARD_TEST),yes)
 altera-project-sv2v: print-rtl-srcs $(RPT_OBJS) altera-flash-fpga
@@ -286,12 +286,12 @@ $(ALTERA_CREATE_PROJECT_TCL):
 	echo "qexit -success" >> $(ALTERA_CREATE_PROJECT_TCL)
 
 #H# sv2v-srcs                   : Convert RTL sources from SystemVerilog to Verilog (using sv2v tool)
-sv2v-srcs-iverilog:
+sv2v-srcs:
 	@mkdir -p $(SV2V_RTL_DIR)
-	@for src in $(SVERILOG_SRC); do $(MAKE) sv2v-convert-iverilog SV2V_SOURCE=$${src}; done
+	@for src in $(SVERILOG_SRC); do $(MAKE) sv2v-convert SV2V_SOURCE=$${src}; done
 
 #H# sv2v-convert                : Convert SystemVerilog module to Verilog
-sv2v-convert-iverilog: check-sv2v
+sv2v-convert: check-sv2v
 	sv2v --write=$(SV2V_DEST) $(SV2V_FLAGS) $(SV2V_SOURCE)
 
 #H# clean                       : Clean build directory
